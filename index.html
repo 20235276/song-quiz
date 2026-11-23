@@ -62,6 +62,10 @@
   @keyframes eq{0%,100%{height:12px}50%{height:58px}}
   .loading{position:absolute;inset:0;z-index:5;display:none;align-items:center;justify-content:center;background:#000c;font-weight:700}
   .stage.busy .loading{display:flex}
+  .playgate{position:absolute;inset:0;z-index:6;display:none;flex-direction:column;gap:10px;align-items:center;justify-content:center;
+    background:#000d;color:#fff;border:0;font:inherit;font-size:18px;font-weight:800;cursor:pointer}
+  .playgate span{width:84px;height:84px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:34px;padding-left:6px;box-shadow:0 0 0 10px #ff3d7133}
+  .stage.gate .playgate{display:flex}
 
   .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0 0}
   .controls .spacer{flex:1}
@@ -170,6 +174,7 @@
       <div class="mask-top"></div>
       <div class="mask-full"><div class="eq"><i></i><i></i><i></i><i></i><i></i></div><div style="color:var(--muted)">무슨 노래일까요?</div></div>
       <div class="loading">불러오는 중…</div>
+      <button class="playgate" id="playGate" type="button"><span>▶</span>눌러서 재생</button>
     </div>
 
     <div class="controls">
@@ -568,11 +573,27 @@ document.querySelectorAll('#segSetup button').forEach(b => b.onclick = () => set
 document.querySelectorAll('#segGame button').forEach(b => b.onclick = () => setRange(b.dataset.mode, true));
 setRange(rangeMode, false);
 
+let pollTimer = null;
+/* 재생이 시작됐는지 직접 확인 (상태 이벤트가 안 오는 브라우저 대비) */
+function watchPlayback(){
+  clearInterval(pollTimer);
+  const t0 = Date.now();
+  pollTimer = setInterval(()=>{
+    if(phase!=='seeking'){ clearInterval(pollTimer); return; }
+    let t=0, dur=0; try{ t = player.getCurrentTime()||0; dur = player.getDuration()||0; }catch(e){}
+    if(dur>0 && t>0.05){ clearInterval(pollTimer); beginPlayback(); }
+  }, 250);
+}
 function onState(e){
-  if(phase==='seeking' && e.data===YT.PlayerState.PLAYING){
+  if(phase==='seeking' && e.data===YT.PlayerState.PLAYING) beginPlayback();
+}
+function beginPlayback(){
+  if(phase!=='seeking') return;
+  {
     const dur = player.getDuration();
     if(!dur){ return; }
-    clearTimeout(seekTimer);
+    clearTimeout(seekTimer); clearInterval(pollTimer);
+    $('stage').classList.remove('gate');
     cur.dur = dur;
     const start = pickStart(dur, rangeMode);
     cur.start = start;
@@ -640,12 +661,15 @@ function nextRound(){
   phase = 'seeking';
   player.mute();
   player.loadVideoById({videoId:id});
+  try{ player.playVideo(); }catch(e){}
+  watchPlayback();
   clearTimeout(seekTimer);
-  seekTimer = setTimeout(()=>{ if(phase==='seeking') skipBroken('응답이 없어 다음 곡으로 넘어갔어요'); }, 15000);
+  // 브라우저가 자동재생을 막으면 재생 버튼을 보여줌
+  seekTimer = setTimeout(()=>{ if(phase==='seeking'){ $('stage').classList.remove('busy'); $('stage').classList.add('gate'); } }, 3500);
 }
 
 function skipBroken(text){
-  toast(text);
+  toast(text); $('stage').classList.remove('gate');
   queue.splice(qi,1);
   // 빠진 자리를 남은 곡으로 채우기
   const rest = pool.filter(x => !queue.includes(x) && !results.some(r=>r.id===x));
@@ -710,6 +734,9 @@ function finish(){
 
 /* ---------------- 이벤트 ---------------- */
 $('startBtn').onclick = start;
+$('playGate').onclick = () => { $('stage').classList.remove('gate'); $('stage').classList.add('busy'); try{ player.playVideo(); }catch(e){}
+  clearTimeout(seekTimer);
+  seekTimer = setTimeout(()=>{ if(phase==='seeking') skipBroken('재생이 안 돼서 다음 곡으로 넘어갔어요'); }, 12000); };
 $('answerForm').addEventListener('submit', submit);
 $('nextBtn').onclick = goNext;
 $('replayBtn').onclick = () => { if(phase==='playing'||phase==='revealed'){ player.seekTo(cur.start,true); player.playVideo(); $('answer').focus(); } };
