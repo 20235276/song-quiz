@@ -123,6 +123,28 @@
   .seekbar input[type=range]{flex:1;height:6px;cursor:pointer}
   .seekbar .tm{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);min-width:38px;text-align:center}
   .ppbtn{appearance:none;border:0;width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;font-size:14px;cursor:pointer;flex:none}
+  .hdr-r{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .chipbtn{cursor:pointer;color:var(--text);font:inherit;font-size:14px;font-weight:700}
+  .chipbtn:hover{border-color:#4a5180}
+  .modal{position:fixed;inset:0;z-index:100;background:#05060dcc;display:flex;align-items:center;justify-content:center;padding:18px}
+  .mbox{width:100%;max-width:440px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 30px 80px #000a;max-height:90vh;overflow:auto}
+  .mbox.wide{max-width:560px}
+  .mbox h2{font-family:"Black Han Sans",sans-serif;font-weight:400;font-size:26px;margin:0 0 6px}
+  .mhead{display:flex;justify-content:space-between;align-items:center}
+  .xbtn{appearance:none;border:0;background:none;color:var(--muted);font-size:20px;cursor:pointer}
+  .rankfor{color:var(--muted);font-size:13px;margin:4px 0 12px;word-break:break-all}
+  .rtabs{flex-wrap:wrap;margin-bottom:12px}
+  .rtabs button{border-radius:999px;padding:6px 12px;font-size:13px;font-weight:700}
+  .rlist{display:flex;flex-direction:column;gap:6px}
+  .ritem{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+  .ritem.me{border-color:var(--accent);background:#3a1626}
+  .ritem .rk{width:30px;text-align:center;font-size:16px}
+  .ritem .rn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+  .ritem .rs{font-weight:900;color:var(--ok)}
+  .ritem .rt{color:var(--muted);font-size:12px;min-width:56px;text-align:right}
+  .endrank{margin-top:18px}
+  .rank-head{font-weight:800;margin-bottom:10px}
+  .rank-head b{color:var(--accent)}
   .hidden{display:none!important}
   kbd{background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;font-size:12px}
   .foot{color:var(--muted);font-size:13px;margin-top:14px;line-height:1.6}
@@ -132,9 +154,13 @@
 <div class="wrap">
   <header>
     <div class="logo" id="logo">노래<span>맞추기</span></div>
-    <div class="hud hidden" id="hud">
-      <div class="chip">문제 <b id="hudQ">1</b>/<span id="hudT">10</span></div>
-      <div class="chip">점수 <b id="hudS">0</b></div>
+    <div class="hdr-r">
+      <div class="hud hidden" id="hud">
+        <div class="chip">문제 <b id="hudQ">1</b>/<span id="hudT">10</span></div>
+        <div class="chip">점수 <b id="hudS">0</b></div>
+      </div>
+      <button class="chip chipbtn" id="nickBtn" type="button" title="닉네임 바꾸기">👤 <span id="nickName">닉네임 설정</span></button>
+      <button class="chip chipbtn" id="rankBtn" type="button">🏆 랭킹</button>
     </div>
   </header>
 
@@ -216,6 +242,7 @@
     <div style="color:var(--muted);font-weight:700">최종 점수</div>
     <div class="bigscore" id="bigscore"></div>
     <div id="endMsg" style="color:var(--muted)"></div>
+    <div id="endRank" class="endrank"></div>
     <div class="row" style="margin-top:18px">
       <div><button class="btn" style="width:100%" id="againBtn">같은 플레이리스트로 다시</button></div>
       <div><button class="btn ghost" style="width:100%" id="homeBtn">처음으로</button></div>
@@ -225,6 +252,34 @@
   </section>
 </div>
 <div class="toast" id="toast"></div>
+
+<!-- 닉네임 설정 -->
+<div class="modal hidden" id="nickModal">
+  <div class="mbox">
+    <h2>👋 닉네임을 정해주세요</h2>
+    <p class="sub">로그인 없이 익명으로 쓰여요. 랭킹에 이 이름으로 올라가요.</p>
+    <div class="answer-row">
+      <input type="text" id="nickInput" maxlength="12" placeholder="1~12자" autocomplete="off">
+      <button class="btn ghost" id="nickRand" type="button" title="랜덤 닉네임">🎲</button>
+    </div>
+    <div class="msg err" id="nickMsg"></div>
+    <button class="btn big" id="nickSave" type="button">확인</button>
+  </div>
+</div>
+
+<!-- 랭킹 -->
+<div class="modal hidden" id="rankModal">
+  <div class="mbox wide">
+    <div class="mhead"><h2>🏆 랭킹</h2><button class="xbtn" id="rankClose" type="button">✕</button></div>
+    <div class="rankfor" id="rankFor"></div>
+    <div class="seg rtabs" id="rankTabs"></div>
+    <div id="rankList"></div>
+    <div class="foot">같은 플레이리스트·같은 문제 수끼리 비교해요. 맞힌 개수가 같으면 더 빨리 맞힌 사람이 위예요.<br>"이것도 정답으로 인정"으로 바꾼 문제는 랭킹 점수에 들어가지 않아요.</div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
 <script>
 /* =========================================================
@@ -667,7 +722,7 @@ function beginPlayback(){
     if(!dur){ return; }
     clearTimeout(seekTimer); clearInterval(pollTimer);
     $('stage').classList.remove('gate');
-    cur.dur = dur;
+    cur.dur = dur; cur.t0 = Date.now();
     const start = pickStart(dur, rangeMode);
     cur.start = start;
     const d = player.getVideoData() || {};
@@ -698,6 +753,7 @@ async function start(){
   const input = $('plInput').value;
   const parsed = parseInput(input);
   const msg = $('setupMsg'); msg.className='msg';
+  if(!getNick()){ openNick(); return; }
   if(!parsed){ msg.className='msg err'; msg.textContent='플레이리스트 링크(list=...)나 유튜브 영상 링크를 넣어주세요.'; return; }
   if(parsed.type==='private'){ msg.className='msg err'; msg.textContent='"좋아요 표시한 음악"은 본인만 볼 수 있어서 못 읽어요. 새 플레이리스트에 곡을 담고 공개로 바꾼 뒤 그 링크를 넣어주세요.'; return; }
   $('startBtn').disabled = true; msg.textContent='플레이리스트 불러오는 중…';
@@ -797,6 +853,7 @@ function submit(e){
 function reveal(ok, guess){
   phase = 'revealed';
   cur.correct = ok; cur.guess = guess;
+  cur.ms = cur.t0 ? Math.min(Date.now() - cur.t0, 10*60*1000) : 0;
   if(ok) score++;
   results.push(cur);
   $('hudS').textContent = score;
@@ -835,6 +892,7 @@ function finish(){
   if(skipped.length){ se.classList.remove('hidden'); se.innerHTML = `<details><summary>⏭ 재생이 막혀서 건너뛴 곡 ${skipped.length}개 (눌러서 보기)</summary>`+
     skipped.map(x=>`<div>• ${esc(x.title || ('플리 '+(x.pos+1)+'번째 곡'))} — ${esc(skipReason(x.code))}</div>`).join('')+`</details>`; }
   else se.classList.add('hidden');
+  submitScore();
 }
 
 /* ---------------- 이벤트 ---------------- */
@@ -877,7 +935,7 @@ $('hintBtn').onclick = () => {
 };
 $('overrideBtn').onclick = () => {
   if(cur && cur.correct===false && cur.guess){
-    cur.correct = true; score++; $('hudS').textContent = score;
+    cur.correct = true; cur.overridden = true; score++; $('hudS').textContent = score;
     $('result').className = 'result show ok'; $('verdict').textContent = '⭕ 정답 인정!';
     $('overrideBtn').classList.add('hidden');
   }
@@ -893,6 +951,108 @@ document.addEventListener('keydown', e => {
 });
 
 /* 기본 플레이리스트 채우기 */
+/* ---------------- 닉네임 · 랭킹 ---------------- */
+const FB_CONFIG = {
+  apiKey: "AIzaSyB4lG9Jct9QpzTyfCLMogxgomgXvymUoBQ",
+  authDomain: "song-quiz-ranking.firebaseapp.com",
+  projectId: "song-quiz-ranking",
+  storageBucket: "song-quiz-ranking.firebasestorage.app",
+  messagingSenderId: "292137724259",
+  appId: "1:292137724259:web:e2d41db6e0b88242a08b56"
+};
+let fdb = null;
+function initFb(){
+  if(fdb) return fdb;
+  try{ if(window.firebase){ if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG); fdb = firebase.firestore(); } }catch(e){ console.warn('[랭킹] Firebase 초기화 실패', e); }
+  return fdb;
+}
+const NICK_KEY = 'songquiz:nick';
+const getNick = () => (store(NICK_KEY) || '').trim();
+function showNick(){ $('nickName').textContent = getNick() || '닉네임 설정'; }
+const NICK_A = ['익명의','수상한','배고픈','졸린','신난','조용한','용감한','느긋한','엉뚱한','귀여운'];
+const NICK_B = ['베토벤','모차르트','바흐','쇼팽','고양이','펭귄','너구리','다람쥐','수달','부엉이'];
+const randNick = () => NICK_A[Math.floor(Math.random()*NICK_A.length)] + NICK_B[Math.floor(Math.random()*NICK_B.length)] + Math.floor(10+Math.random()*90);
+function openNick(){
+  $('nickInput').value = getNick() || randNick();
+  $('nickMsg').textContent = '';
+  $('nickModal').classList.remove('hidden');
+  setTimeout(()=>{ $('nickInput').focus(); $('nickInput').select(); }, 50);
+}
+function saveNick(){
+  const v = $('nickInput').value.trim().replace(/\s+/g,' ');
+  if(v.length < 1 || v.length > 12){ $('nickMsg').textContent = '닉네임은 1~12자로 정해주세요.'; return; }
+  store(NICK_KEY, v); showNick();
+  $('nickModal').classList.add('hidden');
+}
+$('nickBtn').onclick = openNick;
+$('nickSave').onclick = saveNick;
+$('nickRand').onclick = () => { $('nickInput').value = randNick(); $('nickInput').focus(); };
+$('nickInput').addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); saveNick(); } e.stopPropagation(); });
+
+async function loadBoard(listId, total){
+  const snap = await initFb().collection('scores').where('listId','==',listId).limit(1000).get();
+  let rows = snap.docs.map(d=>d.data()).filter(x => total==null || x.total===total);
+  rows.sort((a,b) => b.score-a.score || a.timeMs-b.timeMs);
+  const seen = new Set();                         // 같은 닉네임은 최고 기록만
+  return rows.filter(x => { const k = x.nick+'|'+x.total; if(seen.has(k)) return false; seen.add(k); return true; });
+}
+function renderRows(rows, me){
+  if(!rows.length) return '<div class="msg">아직 기록이 없어요. 첫 기록을 남겨보세요!</div>';
+  return '<div class="rlist">' + rows.map((x,i)=>`<div class="ritem ${x.nick===me?'me':''}">
+    <b class="rk">${i<3?['🥇','🥈','🥉'][i]:i+1}</b><span class="rn">${esc(x.nick)}${x.nick===me?' (나)':''}</span>
+    <span class="rs">${x.score}/${x.total}</span><span class="rt">${(x.timeMs/1000).toFixed(1)}초</span></div>`).join('') + '</div>';
+}
+const listLabel = id => id==='PLCkufx5vFYSk' ? '클래식 플레이리스트' : (id==='custom' ? '직접 넣은 영상 목록' : '플레이리스트 '+id);
+
+async function submitScore(){
+  const el = $('endRank');
+  const total = results.length;
+  if(!total){ el.innerHTML=''; return; }
+  const rankScore = results.filter(x => x.correct && !x.overridden).length;
+  const timeMs = Math.round(results.reduce((a,x)=>a+(x.ms||0), 0));
+  const listId = (currentListId || 'custom').slice(0,100);
+  if(!initFb()){ el.innerHTML = '<div class="msg err">랭킹 서버에 연결하지 못해서 기록을 저장하지 못했어요.</div>'; return; }
+  el.innerHTML = '<div class="msg">랭킹에 기록 올리는 중…</div>';
+  try{
+    await fdb.collection('scores').add({ nick:getNick().slice(0,12), score:rankScore, total, listId, timeMs,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    const rows = await loadBoard(listId, total);
+    const me = rows.findIndex(x => x.nick===getNick());
+    el.innerHTML = `<div class="rank-head">🏆 ${esc(listLabel(listId))} · ${total}문제 랭킹 — 내 최고 기록 <b>${me+1}위</b> / ${rows.length}명</div>`
+      + (rankScore!==score ? `<div class="msg">랭킹 점수는 ${rankScore}점이에요 (직접 인정한 ${score-rankScore}문제 제외)</div>` : '')
+      + renderRows(rows.slice(0,10), getNick());
+  }catch(e){
+    console.warn('[랭킹] 등록 실패', e);
+    el.innerHTML = '<div class="msg err">랭킹 등록에 실패했어요: '+esc(e.message||String(e))+'</div>';
+  }
+}
+
+async function openRank(){
+  $('rankModal').classList.remove('hidden');
+  const parsed = parseInput($('plInput').value);
+  const listId = parsed && parsed.type==='playlist' ? parsed.id : (currentListId || 'custom');
+  $('rankFor').textContent = listLabel(listId);
+  $('rankTabs').innerHTML = ''; $('rankList').innerHTML = '<div class="msg">불러오는 중…</div>';
+  if(!initFb()){ $('rankList').innerHTML = '<div class="msg err">랭킹 서버에 연결하지 못했어요.</div>'; return; }
+  try{
+    const all = await loadBoard(listId, null);
+    const totals = [...new Set(all.map(x=>x.total))].sort((a,b)=>a-b);
+    if(!totals.length){ $('rankList').innerHTML = renderRows([], getNick()); return; }
+    let sel = totals.includes(+$('rounds').value) ? +$('rounds').value : totals[0];
+    const draw = () => {
+      $('rankTabs').innerHTML = totals.map(t=>`<button type="button" class="${t===sel?'on':''}" data-t="${t}">${t}문제</button>`).join('');
+      $('rankTabs').querySelectorAll('button').forEach(b => b.onclick = () => { sel = +b.dataset.t; draw(); });
+      $('rankList').innerHTML = renderRows(all.filter(x=>x.total===sel).slice(0,50), getNick());
+    };
+    draw();
+  }catch(e){ $('rankList').innerHTML = '<div class="msg err">랭킹을 불러오지 못했어요: '+esc(e.message||String(e))+'</div>'; }
+}
+$('rankBtn').onclick = openRank;
+$('rankClose').onclick = () => $('rankModal').classList.add('hidden');
+$('rankModal').addEventListener('click', e => { if(e.target.id==='rankModal') $('rankModal').classList.add('hidden'); });
+showNick();
+if(!getNick()) openNick();
+
 (function init(){
   if(location.protocol==='file:'){
     const m=$('setupMsg'); m.className='msg err';
