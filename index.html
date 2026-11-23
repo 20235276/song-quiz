@@ -282,22 +282,28 @@ const SONGS = [
   {c:'드보르작', e:['dvorak'], t:'유모레스크', a:['유모레스크','휴모레스크'], k:['humoresque','humoreske','op 101']},
   {c:'브람스', e:['brahms'], t:'헝가리 무곡 5번', a:['헝가리 무곡','헝가리무곡 5번','헝가리 춤곡'], k:['hungarian dance','ungarische','ungarischer']},
   {c:'드뷔시', e:['debussy'], t:'달빛', a:['달빛','클레어 드 룬','clair de lune','베르가마스크'], k:['clair de lune','bergamasque']},
-  {c:'파가니니', e:['paganini'], t:'카프리스(카프리치오) 24번', a:['카프리스 24번','카프리치오 24번','카프리스','카프리치오','24번 카프리스'], k:['caprice','capriccio','capricci']},
+  {c:'파가니니', e:['paganini'], t:'카프리스(카프리치오) 24번', a:['카프리스 24번','카프리치오 24번','카프리스','카프리치오','24번 카프리스'], k:['caprice','caprices','capriccio','capricci','capriccios']},
 ];
 
 function fold(s){ return ' '+String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
   .replace(/ö/g,'o').replace(/[^a-z0-9가-힣]+/g,' ').replace(/\s+/g,' ').trim()+' '; }
 /** 유튜브 제목 → SONGS 항목 찾기 */
+/* 한국어 정답 목록을 쓸 플레이리스트 (다른 플레이리스트는 유튜브 원제로 판정) */
+const SONGS_PLAYLISTS = ['PLCkufx5vFYSk'];
+let currentListId = null;
 function matchSong(title, author, pos){
+  if(!SONGS_PLAYLISTS.includes(currentListId)) return null;
   const t = fold(title+' '+author);
   let best = null, bestScore = 0;
   SONGS.forEach((s, i) => {
-    let score = 0;
+    let score = 0, content = 0;
     for(const k of s.k){
       const parts = Array.isArray(k) ? k : [k];
-      if(parts.every(p => t.includes(fold(p)))) score += 10*parts.length;
+      if(parts.every(p => t.includes(fold(p)))) content += 10*parts.length;
     }
-    for(const al of s.a){ const f = fold(al); if(f.trim().length>=2 && /[가-힣]/.test(f) && t.includes(f)) score += 6; }
+    for(const al of s.a){ const f = fold(al); if(f.trim().length>=2 && /[가-힣]/.test(f) && t.includes(f)) content += 6; }
+    if(content < 6) return;   // 제목에 실제 단서가 없으면 연결 안 함
+    score = content;
     if(s.e.some(e => t.includes(fold(e)))) score += 3;
     if(i===pos) score += 5;
     if(score > bestScore){ bestScore = score; best = s; }
@@ -631,6 +637,7 @@ async function start(){
   try{
     show('game'); $('stage').classList.add('busy');
     await ensurePlayer();
+    currentListId = parsed.type==='playlist' ? parsed.id : null;
     pool = parsed.type==='playlist' ? await fetchPlaylistIds(parsed.id) : parsed.ids;
     if(!pool.length) throw new Error('노래가 없어요.');
     store('songquiz:last', input.trim()); lastInput = input.trim();
