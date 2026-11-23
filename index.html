@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>노래 맞추기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e0f1a; --panel:#171a2b; --panel2:#1f2338; --line:#2c3150;
+    --text:#eef0ff; --muted:#9aa0c3; --accent:#ff3d71; --accent2:#7c5cff;
+    --ok:#22d39a; --bad:#ff5a5a; --warn:#ffc24b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans KR",system-ui,sans-serif}
+  body{min-height:100vh;background:
+      radial-gradient(900px 500px at 10% -10%, #2a1a4a 0%, transparent 60%),
+      radial-gradient(800px 500px at 110% 10%, #3a1230 0%, transparent 55%), var(--bg)}
+  .wrap{max-width:880px;margin:0 auto;padding:28px 18px 60px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}
+  .logo{font-family:"Black Han Sans",sans-serif;font-size:30px;letter-spacing:.5px;cursor:pointer;user-select:none}
+  .logo span{color:var(--accent)}
+  .hud{display:flex;gap:10px;font-weight:700}
+  .chip{background:var(--panel);border:1px solid var(--line);padding:7px 13px;border-radius:999px;font-size:14px;white-space:nowrap}
+  .chip b{color:var(--accent)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px}
+  h1{font-family:"Black Han Sans",sans-serif;font-weight:400;font-size:40px;margin:6px 0 6px}
+  p.sub{color:var(--muted);margin:0 0 22px;line-height:1.6}
+  label.lab{display:block;font-weight:700;margin:16px 0 8px;font-size:14px;color:#cfd3f5}
+  input[type=text],textarea,select{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:12px;padding:13px 14px;font:inherit;font-size:16px;outline:none}
+  textarea{min-height:46px;resize:vertical}
+  input[type=text]:focus,textarea:focus,select:focus{border-color:var(--accent2);box-shadow:0 0 0 3px #7c5cff33}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:180px}
+  .btn{appearance:none;border:0;border-radius:12px;padding:13px 20px;font:inherit;font-weight:800;font-size:16px;cursor:pointer;
+    background:var(--accent);color:#fff;transition:transform .08s, filter .15s}
+  .btn:hover{filter:brightness(1.08)} .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:var(--panel2);border:1px solid var(--line);color:var(--text)}
+  .btn.small{padding:9px 13px;font-size:14px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.big{width:100%;margin-top:22px;padding:16px;font-size:18px}
+  .msg{margin-top:14px;color:var(--muted);font-size:14px;min-height:20px}
+  .msg.err{color:var(--bad)}
+  .check{display:flex;align-items:center;gap:8px;margin-top:14px;color:#cfd3f5;font-size:14px;cursor:pointer}
+
+  /* Game */
+  .stage{position:relative;width:100%;aspect-ratio:16/9;border-radius:16px;overflow:hidden;background:#000;border:1px solid var(--line);
+    box-shadow:0 20px 60px #0008}
+  #player,.stage iframe{position:absolute;inset:0;width:100%;height:100%}
+  .stage.guessing iframe{pointer-events:none}
+  .mask-top{position:absolute;left:0;right:0;top:0;height:17%;background:linear-gradient(#000 70%,#0000);z-index:3;transition:opacity .3s}
+  .mask-full{position:absolute;inset:0;z-index:4;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;
+    background:radial-gradient(circle at 50% 50%,#2b2050,#0b0b14);}
+  .stage.hidevid.guessing .mask-full{display:flex}
+  .stage:not(.guessing) .mask-top{opacity:0}
+  .eq{display:flex;gap:6px;align-items:flex-end;height:60px}
+  .eq i{width:10px;background:var(--accent);border-radius:4px;animation:eq 1s infinite ease-in-out}
+  .eq i:nth-child(2){animation-delay:.15s;background:var(--accent2)} .eq i:nth-child(3){animation-delay:.3s}
+  .eq i:nth-child(4){animation-delay:.45s;background:var(--accent2)} .eq i:nth-child(5){animation-delay:.6s}
+  @keyframes eq{0%,100%{height:12px}50%{height:58px}}
+  .loading{position:absolute;inset:0;z-index:5;display:none;align-items:center;justify-content:center;background:#000c;font-weight:700}
+  .stage.busy .loading{display:flex}
+
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0 0}
+  .controls .spacer{flex:1}
+  .vol{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+  input[type=range]{accent-color:var(--accent)}
+  .qnum{font-family:"Black Han Sans",sans-serif;font-size:22px;margin:18px 0 8px}
+  .qnum small{font-family:"Noto Sans KR";font-size:14px;color:var(--muted);font-weight:500;margin-left:8px}
+  .answer-row{display:flex;gap:10px}
+  .answer-row input{flex:1;font-size:18px;padding:15px 16px}
+  .hint{margin-top:10px;color:var(--warn);font-weight:700;letter-spacing:2px;min-height:22px}
+
+  .result{margin-top:16px;border-radius:14px;padding:18px 18px;display:none;border:1px solid}
+  .result.show{display:block;animation:pop .25s ease-out}
+  @keyframes pop{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}
+  .result.ok{background:#0f2e26;border-color:#1f6b55}
+  .result.bad{background:#341619;border-color:#7a2c33}
+  .result .verdict{font-family:"Black Han Sans",sans-serif;font-size:30px}
+  .result.ok .verdict{color:var(--ok)} .result.bad .verdict{color:var(--bad)}
+  .result .song{font-size:20px;font-weight:800;margin-top:6px;word-break:keep-all}
+  .result .artist{color:var(--muted);margin-top:2px}
+  .result .yours{color:var(--muted);font-size:14px;margin-top:8px}
+  .result .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000d;border:1px solid var(--line);padding:10px 16px;
+    border-radius:10px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1}
+
+  /* End */
+  .bigscore{font-family:"Black Han Sans",sans-serif;font-size:64px;line-height:1;margin:8px 0}
+  .bigscore span{color:var(--accent)}
+  .list{margin-top:18px;display:flex;flex-direction:column;gap:8px}
+  .item{display:flex;gap:12px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .item .mark{font-weight:900;width:26px;text-align:center;font-size:18px}
+  .item .mark.o{color:var(--ok)} .item .mark.x{color:var(--bad)}
+  .item .t{flex:1;min-width:0}
+  .item .t div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .t .g{font-size:13px;color:var(--muted)}
+  .item a{color:var(--muted);font-size:13px;text-decoration:none}
+  .item a:hover{color:var(--text)}
+  .seg{display:flex;gap:8px}
+  .seg button{appearance:none;font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);cursor:pointer;transition:.15s}
+  .seg button:hover{border-color:#4a5180}
+  .seg button.on{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
+  .big-seg{display:grid;grid-template-columns:repeat(4,1fr)}
+  .big-seg button{border-radius:12px;padding:12px 8px;display:flex;flex-direction:column;gap:3px;align-items:center}
+  .big-seg b{font-size:16px} .big-seg span{font-size:12px;color:var(--muted)} .big-seg button.on span{color:#fff}
+  @media (max-width:560px){.big-seg{grid-template-columns:repeat(2,1fr)}}
+  .mini-seg{gap:0;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .mini-seg button{border:0;border-radius:0;padding:8px 11px;font-size:13px;font-weight:700}
+  .mini-seg button+button{border-left:1px solid var(--line)}
+  .hidden{display:none!important}
+  kbd{background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;font-size:12px}
+  .foot{color:var(--muted);font-size:13px;margin-top:14px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo" id="logo">노래<span>맞추기</span></div>
+    <div class="hud hidden" id="hud">
+      <div class="chip">문제 <b id="hudQ">1</b>/<span id="hudT">10</span></div>
+      <div class="chip">점수 <b id="hudS">0</b></div>
+    </div>
+  </header>
+
+  <!-- 시작 화면 -->
+  <section id="setup" class="card">
+    <h1>🎵 노래 맞추기</h1>
+    <p class="sub">플레이리스트의 노래가 <b>고른 구간</b>에서 랜덤으로 재생됩니다.<br>제목을 대충 입력해도 비슷하면 정답! (예: <i>베토벤 9번 4악장</i>)</p>
+
+    <label class="lab" for="plInput">유튜브 / 유튜브 뮤직 플레이리스트 링크</label>
+    <textarea id="plInput" rows="2" placeholder="https://music.youtube.com/playlist?list=...  (영상 링크를 줄마다 여러 개 붙여넣어도 됨)"></textarea>
+
+    <div class="row">
+      <div>
+        <label class="lab" for="rounds">문제 수</label>
+        <select id="rounds">
+          <option value="5">5문제</option>
+          <option value="10" selected>10문제</option>
+          <option value="20">20문제</option>
+          <option value="30">30문제</option>
+          <option value="0">전곡</option>
+        </select>
+      </div>
+
+    </div>
+    <label class="lab">어디부터 들려줄까요?</label>
+    <div class="seg big-seg" id="segSetup">
+      <button type="button" data-mode="intro"><b>처음부터</b><span>0초부터 재생</span></button>
+      <button type="button" data-mode="early"><b>초반 부분</b><span>앞쪽 0~25% 중 랜덤</span></button>
+      <button type="button" data-mode="mid"><b>중간 부분</b><span>35~65% 중 랜덤</span></button>
+      <button type="button" data-mode="any"><b>아무 곳</b><span>처음~끝 완전 랜덤</span></button>
+    </div>
+    <label class="check"><input type="checkbox" id="hideVid"> 정답 전까지 영상 가리기 (소리만 듣기)</label>
+
+    <button class="btn big" id="startBtn">게임 시작</button>
+    <div class="msg" id="setupMsg"></div>
+    <div class="foot">단축키: <kbd>Enter</kbd> 제출 / 다음 곡 · <kbd>Esc</kbd> 다시 듣기<br>
+      임베드가 막힌 영상(일부 공식 MV 등)은 자동으로 건너뜁니다.</div>
+  </section>
+
+  <!-- 게임 화면 -->
+  <section id="game" class="hidden">
+    <div class="stage guessing" id="stage">
+      <div id="player"></div>
+      <div class="mask-top"></div>
+      <div class="mask-full"><div class="eq"><i></i><i></i><i></i><i></i><i></i></div><div style="color:var(--muted)">무슨 노래일까요?</div></div>
+      <div class="loading">불러오는 중…</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn ghost small" id="replayBtn">↺ 다시 듣기</button>
+      <button class="btn ghost small" id="hintBtn">💡 힌트</button>
+      <button class="btn ghost small" id="skipBtn">패스</button>
+      <div class="spacer"></div>
+      <div class="seg mini-seg" id="segGame" title="듣는 구간 바꾸기 (지금 곡에 바로 적용)">
+        <button type="button" data-mode="intro">처음</button><button type="button" data-mode="early">초반</button><button type="button" data-mode="mid">중간</button><button type="button" data-mode="any">랜덤</button>
+      </div>
+      <div class="vol">🔊 <input type="range" id="vol" min="0" max="100" value="70"></div>
+    </div>
+
+    <div class="qnum" id="qnum">Q1<small></small></div>
+    <form class="answer-row" id="answerForm" autocomplete="off">
+      <input type="text" id="answer" placeholder="곡 제목을 입력하세요 (예: 베토벤 운명, 월광 3악장)">
+      <button class="btn" id="submitBtn" type="submit">제출</button>
+    </form>
+    <div class="hint" id="hint"></div>
+
+    <div class="result" id="result">
+      <div class="verdict" id="verdict"></div>
+      <div class="song" id="rSong"></div>
+      <div class="artist" id="rArtist"></div>
+      <div class="yours" id="rYours"></div>
+      <div class="acts">
+        <button class="btn" id="nextBtn">다음 곡 →</button>
+        <button class="btn ghost small" id="overrideBtn">이것도 정답으로 인정</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 결과 화면 -->
+  <section id="end" class="card hidden">
+    <div style="color:var(--muted);font-weight:700">최종 점수</div>
+    <div class="bigscore" id="bigscore"></div>
+    <div id="endMsg" style="color:var(--muted)"></div>
+    <div class="row" style="margin-top:18px">
+      <div><button class="btn" style="width:100%" id="againBtn">같은 플레이리스트로 다시</button></div>
+      <div><button class="btn ghost" style="width:100%" id="homeBtn">처음으로</button></div>
+    </div>
+    <div class="list" id="list"></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   설정: 여기에 플레이리스트 링크를 넣어두면 기본값으로 채워짐
+   (주소 뒤에 ?list=플레이리스트ID 를 붙여도 자동으로 들어감)
+   ========================================================= */
+const DEFAULT_PLAYLIST = "https://music.youtube.com/playlist?list=PLCkufx5vFYSk";
+
+/* 정답으로 인정할 별명 (영상ID: ["별명", ...]) — 필요하면 추가 */
+const ALIASES = {
+  // "dQw4w9WgXcQ": ["릭롤", "never gonna give you up"],
+};
+
+/* =========================================================
+   한국어 정답 목록 (플레이리스트 순서대로)
+   c: 작곡가, t: 곡 제목(한국어), a: 이것도 정답 처리할 별명
+   k: 유튜브 영상 제목에서 이 곡을 알아보는 단서 (["a","b"] = 둘 다 있어야 함)
+   e: 영어 작곡가 이름
+   각 영상은 유튜브 제목을 보고 이 목록에서 맞는 곡을 자동으로 찾아요.
+   ========================================================= */
+const SONGS = [
+  {c:'뒤카', e:['dukas'], t:'마법사의 제자', a:['마법사 제자','마법사의제자'], k:['sorcerer','apprenti','zauberlehrling','apprentice']},
+  {c:'라벨', e:['ravel'], t:'볼레로', a:['볼레로'], k:['bolero']},
+  {c:'차이코프스키', e:['tchaikovsky','tschaikowsky'], t:'1812 서곡', a:['1812','1812서곡','1812년 서곡'], k:['1812']},
+  {c:'바흐', e:['bach'], t:'관현악 모음곡 2번 BWV 1067 – Badinerie', a:['바디네리','바디네리에','badinerie','관현악 모음곡 2번','관현악모음곡'], k:['badinerie','1067','orchestral suite no 2']},
+  {c:'바흐', e:['bach'], t:'무반주 첼로 모음곡 1번 BWV 1007 – Prelude', a:['무반주 첼로','첼로 모음곡','무반주 첼로 모음곡 1번','첼로 프렐류드'], k:['1007','cello suite']},
+  {c:'바흐', e:['bach','petzold'], t:'미뉴에트 G장조 BWV 114', a:['미뉴에트','미뉴엣','메뉴엣'], k:['minuet','menuet','anh 114','bwv 114']},
+  {c:'바흐', e:['bach'], t:'토카타와 푸가 d단조 BWV 565', a:['토카타와 푸가','토카타','토카타 푸가'], k:['toccata','565']},
+  {c:'바흐', e:['bach'], t:'쳄발로 협주곡 1번 BWV 1052 (노다메 칸타빌레 삽입곡)', a:['쳄발로 협주곡','쳄발로협주곡 1번','하프시코드 협주곡','건반 협주곡 1번','노다메'], k:['1052','harpsichord concerto','keyboard concerto','cembalo','nodame']},
+  {c:'헨델', e:['handel','haendel','händel'], t:'수상음악 HWV 348-11 Alla Hornpipe', a:['수상음악','수상 음악','혼파이프','알라 혼파이프'], k:['hornpipe','water music','wassermusik','348','349']},
+  {c:'헨델', e:['handel','haendel'], t:'사라방드 d단조 HWV 437', a:['사라방드','사라반드'], k:['sarabande','437']},
+  {c:'헨델', e:['handel','haendel'], t:'하프 협주곡 B♭장조 HWV 294', a:['하프협주곡','하프 협주곡'], k:['harp concerto','294']},
+  {c:'헨델', e:['handel','haendel'], t:'Lascia ch’io pianga (오페라 ‘리날도’ 중)', a:['울게 하소서','울게하소서','라샤 키오 피앙가','리날도','lascia chio pianga'], k:['lascia','pianga','rinaldo']},
+  {c:'헨델', e:['handel','haendel'], t:'오라토리오 〈메시아〉 중 ‘할렐루야’', a:['할렐루야','메시아','할렐루야 합창'], k:['hallelujah','halleluja','messiah']},
+  {c:'파헬벨', e:['pachelbel'], t:'캐논 (Canon)', a:['캐논','카논','캐논 변주곡','파헬벨 캐논'], k:['canon','kanon','cannon']},
+  {c:'비발디', e:['vivaldi'], t:'사계', a:['사계','사계 봄','사계 여름','사계 가을','사계 겨울','봄','겨울','four seasons'], k:['four seasons','quattro stagioni','le quattro','rv 269','rv 315','rv 293','rv 297']},
+  {c:'하이든', e:['haydn'], t:'트럼펫 협주곡 E♭장조 3악장', a:['트럼펫 협주곡','트럼펫협주곡','트럼펫 협주곡 3악장'], k:['trumpet']},
+  {c:'하이든', e:['haydn'], t:'현악 4중주 ‘종달새’ 1악장', a:['종달새','현악 4중주 종달새','현악4중주 종달새'], k:['lark','lerchen','64 no 5']},
+  {c:'모차르트', e:['mozart'], t:'세레나데 (Eine kleine Nachtmusik)', a:['아이네 클라이네 나흐트무지크','아이네클라이네나흐트무지크','아이네 클라이네','세레나데','작은 밤의 음악','세레나데 13번'], k:['eine kleine','nachtmusik','nacht musik','525','serenade']},
+  {c:'모차르트', e:['mozart'], t:'작은 별 주제에 의한 변주곡', a:['작은별','작은 별','작은별 변주곡','반짝반짝 작은별','아 말씀드릴게요 어머니','아 어머니께 말씀드릴게요'], k:['twinkle','vous dirai','265','300e']},
+  {c:'베토벤', e:['beethoven'], t:'가곡 ‘Ich liebe dich’', a:['이히 리베 디히','ich liebe dich','그대를 사랑해','이히리베디히'], k:['ich liebe dich','woo 123']},
+  {c:'베토벤', e:['beethoven'], t:'엘리제를 위하여', a:['엘리제를 위하여','엘리제','fur elise'], k:['elise','woo 59']},
+  {c:'모차르트', e:['mozart'], t:'교향곡 25번 1악장', a:['모차르트 25번','교향곡 25번'], k:['symphony no 25','183','173db']},
+  {c:'모차르트', e:['mozart'], t:'교향곡 40번 1악장', a:['모차르트 40번','교향곡 40번'], k:['symphony no 40','550']},
+  {c:'모차르트', e:['mozart'], t:'피아노 협주곡 21번 2악장', a:['피아노 협주곡 21번','피협 21번','엘비라 마디간'], k:['piano concerto no 21','467','elvira']},
+  {c:'베토벤', e:['beethoven'], t:'교향곡 5번 ‘운명’', a:['운명','운명 교향곡','베토벤 운명','교향곡 5번'], k:['op 67',['beethoven','symphony no 5'],'5th symphony','fate','schicksal']},
+  {c:'베토벤', e:['beethoven'], t:'피아노 소나타 ‘월광’ 1악장', a:['월광 1악장','월광 소나타 1악장','월광'], k:[['moonlight','adagio'],['27 no 2','adagio'],['moonlight','1st'],['14','adagio sostenuto']]},
+  {c:'베토벤', e:['beethoven'], t:'피아노 소나타 ‘월광’ 3악장', a:['월광 3악장','월광 소나타 3악장','월광'], k:[['moonlight','presto'],['27 no 2','presto'],['moonlight','3rd'],['14','presto agitato']]},
+  {c:'베토벤', e:['beethoven'], t:'교향곡 7번 2악장', a:['교향곡 7번','베토벤 7번','7번 2악장'], k:['op 92',['beethoven','symphony no 7'],'7th symphony']},
+  {c:'베토벤', e:['beethoven'], t:'교향곡 9번 ‘합창’ 4악장', a:['합창','합창 교향곡','환희의 송가','교향곡 9번','베토벤 9번'], k:['op 125','choral','ode to joy','an die freude',['beethoven','symphony no 9'],'9th symphony']},
+  {c:'라흐마니노프', e:['rachmaninoff','rachmaninov','rachmaninow'], t:'피아노 협주곡 3번', a:['피아노 협주곡 3번','라피협 3번','라흐마니노프 3번','피협 3번'], k:['op 30','piano concerto no 3']},
+  {c:'슈베르트', e:['schubert'], t:'마왕', a:['마왕','erlkonig'], k:['erlkonig','erlkoenig','erl king','erlking','d 328']},
+  {c:'슈베르트', e:['schubert'], t:'피아노 트리오(3중주) 2번 2악장', a:['피아노 트리오','피아노 3중주','피아노 삼중주','피아노트리오 2번','트리오 2번'], k:['929','piano trio','trio no 2']},
+  {c:'슈베르트', e:['schubert'], t:'피아노 5중주 ‘송어’ 4악장', a:['송어','피아노 5중주','송어 4악장'], k:['trout','forelle','667','piano quintet']},
+  {c:'엘가', e:['elgar'], t:'위풍당당 행진곡', a:['위풍당당','위풍당당 행진곡'], k:['pomp and circumstance','pomp']},
+  {c:'쇼팽', e:['chopin'], t:'연습곡 ‘흑건’', a:['흑건','흑건 연습곡','검은 건반'], k:['black key','10 no 5']},
+  {c:'쇼팽', e:['chopin'], t:'녹턴 20번 C#단조', a:['녹턴 20번','야상곡 20번','녹턴','야상곡','쇼팽 녹턴'], k:['nocturne','posth','kk iva','b 49','c sharp minor']},
+  {c:'리스트', e:['liszt'], t:'라 캄파넬라', a:['라캄파넬라','라 캄파넬라','캄파넬라'], k:['campanella']},
+  {c:'드보르작', e:['dvorak','dvořák'], t:'신세계 교향곡 4악장', a:['신세계','신세계 교향곡','신세계로부터','교향곡 9번 신세계'], k:['new world','op 95','neuen welt',['dvorak','symphony no 9']]},
+  {c:'드보르작', e:['dvorak'], t:'유모레스크', a:['유모레스크','휴모레스크'], k:['humoresque','humoreske','op 101']},
+  {c:'브람스', e:['brahms'], t:'헝가리 무곡 5번', a:['헝가리 무곡','헝가리무곡 5번','헝가리 춤곡'], k:['hungarian dance','ungarische','ungarischer']},
+  {c:'드뷔시', e:['debussy'], t:'달빛', a:['달빛','클레어 드 룬','clair de lune','베르가마스크'], k:['clair de lune','bergamasque']},
+  {c:'파가니니', e:['paganini'], t:'카프리스(카프리치오) 24번', a:['카프리스 24번','카프리치오 24번','카프리스','카프리치오','24번 카프리스'], k:['caprice','capriccio','capricci']},
+];
+
+function fold(s){ return ' '+String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
+  .replace(/ö/g,'o').replace(/[^a-z0-9가-힣]+/g,' ').replace(/\s+/g,' ').trim()+' '; }
+/** 유튜브 제목 → SONGS 항목 찾기 */
+function matchSong(title, author, pos){
+  const t = fold(title+' '+author);
+  let best = null, bestScore = 0;
+  SONGS.forEach((s, i) => {
+    let score = 0;
+    for(const k of s.k){
+      const parts = Array.isArray(k) ? k : [k];
+      if(parts.every(p => t.includes(fold(p)))) score += 10*parts.length;
+    }
+    for(const al of s.a){ const f = fold(al); if(f.trim().length>=2 && /[가-힣]/.test(f) && t.includes(f)) score += 6; }
+    if(s.e.some(e => t.includes(fold(e)))) score += 3;
+    if(i===pos) score += 5;
+    if(score > bestScore){ bestScore = score; best = s; }
+  });
+  return best;
+}
+
+/* ---------------- 유틸 ---------------- */
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function toast(t, ms = 2200){ const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(()=>el.classList.remove('show'), ms); }
+function shuffle(a){ a = a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k, v);}catch(e){ return null; } }
+
+function lev(a, b){
+  if(a===b) return 0; if(!a.length) return b.length; if(!b.length) return a.length;
+  let prev = Array.from({length:b.length+1}, (_,i)=>i);
+  for(let i=1;i<=a.length;i++){
+    const cur=[i];
+    for(let j=1;j<=b.length;j++) cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur;
+  }
+  return prev[b.length];
+}
+
+/* ---------------- 입력 파싱 ---------------- */
+function parseInput(text){
+  text = (text||'').trim();
+  const list = text.match(/[?&]list=([A-Za-z0-9_-]+)/) || text.match(/\/browse\/VL([A-Za-z0-9_-]+)/);
+  if(list){
+    if(list[1]==='LM' || list[1]==='LL') return {type:'private'};
+    return {type:'playlist', id:list[1]};
+  }
+  const vids = [];
+  const re = /(?:v=|youtu\.be\/|\/shorts\/|\/embed\/)([A-Za-z0-9_-]{11})/g; let m;
+  while((m = re.exec(text))) vids.push(m[1]);
+  if(vids.length) return {type:'videos', ids:[...new Set(vids)]};
+  if(/^(PL|OL|RD|UU|LL|FL|VL)[A-Za-z0-9_-]{10,}$/.test(text)) return {type:'playlist', id:text.replace(/^VL/,'')};
+  return null;
+}
+
+/* ---------------- 제목 정리 / 정답 판정 ---------------- */
+const KO_DICT = [
+  [/(\d+)\s*악장/g,' mvt$1 '], [/제?\s*(\d+)\s*번/g,' $1 '], [/(\d+)\s*번째/g,' $1 '],
+  [/베토벤/g,' beethoven '], [/모차르트|모짜르트/g,' mozart '], [/바흐/g,' bach '], [/쇼팽/g,' chopin '],
+  [/차이코프스키|차이콥스키/g,' tchaikovsky '], [/비발디/g,' vivaldi '], [/드뷔시|드비쉬/g,' debussy '],
+  [/브람스/g,' brahms '], [/슈베르트/g,' schubert '], [/슈만/g,' schumann '], [/라흐마니노프/g,' rachmaninoff rachmaninov '],
+  [/드보르작|드보르자크/g,' dvorak '], [/헨델/g,' handel '], [/하이든/g,' haydn '], [/멘델스존/g,' mendelssohn '],
+  [/파헬벨/g,' pachelbel canon '], [/엘가/g,' elgar '], [/라벨/g,' ravel '], [/바그너/g,' wagner '], [/베르디/g,' verdi '],
+  [/푸치니/g,' puccini '], [/림스키코르사코프/g,' rimsky korsakov '], [/시벨리우스/g,' sibelius '], [/말러/g,' mahler '],
+  [/스메타나/g,' smetana '], [/생상스/g,' saint saens '], [/그리그/g,' grieg '], [/로시니/g,' rossini '], [/비제/g,' bizet '],
+  [/히사이시\s*조/g,' hisaishi '], [/교향곡/g,' symphony '], [/협주곡/g,' concerto '], [/소나타/g,' sonata '],
+  [/피아노/g,' piano '], [/바이올린/g,' violin '], [/첼로/g,' cello '], [/서곡/g,' overture '], [/행진곡/g,' march '],
+  [/왈츠/g,' waltz '], [/녹턴|야상곡/g,' nocturne '], [/전주곡/g,' prelude '], [/광시곡|랩소디/g,' rhapsody '],
+  [/사계/g,' four seasons '], [/운명/g,' fate '], [/합창/g,' choral ode joy '], [/환희의\s*송가/g,' ode to joy '],
+  [/월광/g,' moonlight '], [/비창/g,' pathetique '], [/영웅/g,' eroica '], [/전원/g,' pastoral '], [/신세계/g,' new world '],
+  [/엘리제를\s*위하여/g,' fur elise '], [/캐논/g,' canon '], [/호두까기\s*인형/g,' nutcracker '], [/백조의\s*호수/g,' swan lake '],
+  [/터키\s*행진곡/g,' turkish march alla turca '], [/작은\s*별/g,' twinkle '], [/혁명/g,' revolutionary '], [/강아지/g,' minute '],
+  [/봄/g,' spring '], [/여름/g,' summer '], [/가을/g,' autumn '], [/겨울/g,' winter '], [/라장조/g,' d major '], [/다장조/g,' c major '],
+];
+const ROMAN = {i:1,ii:2,iii:3,iv:4,v:5,vi:6,vii:7,viii:8,ix:9,x:10,xi:11,xii:12};
+const STOP = new Set(['the','a','an','of','in','on','and','feat','ft','with','by','to','no','op','for','from','at','is','major','minor','flat','sharp','bwv','k','kv','hob','d']);
+const JUNK = /\b(official|music|lyrics?|audio|video|mv|m\/v|hd|hq|4k|visualizer|teaser|remaster(?:ed)?|full\s*ver(?:sion)?|color\s*coded|eng\s*sub|가사|공식|뮤직비디오)\b/gi;
+
+function normalize(s){
+  s = String(s||'').normalize('NFKC').toLowerCase()
+    .replace(/[’'`"“”«»「」『』〈〉<>‘]/g,' ').replace(/&/g,' and ')
+    .replace(JUNK,' ')
+    .replace(/(bwv|hwv|op|kv|k|woo|rv|d)\.?\s*(\d)/g,'$1 $2')
+    .replace(/(\d+)(?:st|nd|rd|th)\s+(?:movement|mvt\.?|mov\.?)/g,' mvt$1 ')
+    .replace(/(?:movement|mvt\.?|mov\.?)\s*(\d+)/g,' mvt$1 ')
+    .replace(/(^|[\s:,;\-–—(\/])([ivx]{1,4})\.(?=\s|$|[^a-z])/g,(m,p,r)=> ROMAN[r] ? `${p} mvt${ROMAN[r]} ` : m)
+    .replace(/(\d+)\s*악장/g,' mvt$1 ')
+    .replace(/(\d+)\s*번(째)?/g,' $1 ')
+    .replace(/\bno\.?\s*(\d+)/g,' $1 ')
+    .replace(/[^\p{L}\p{N}]+/gu,' ');
+  return s.split(/\s+/).filter(Boolean)
+    .map(t => (t!=='i' && ROMAN[t]) ? String(ROMAN[t]) : t)
+    .filter(t => !STOP.has(t));
+}
+function translateKo(s){ let r = ' '+s+' '; for(const [re,to] of KO_DICT) r = r.replace(re,to); return r; }
+function tokenSet(s){ return [...new Set([...normalize(s), ...normalize(translateKo(s))])]; }
+
+const isNumTok = t => /^(mvt)?\d+$/.test(t);
+const GENERIC = new Set(['symphony','교향곡','concerto','협주곡','sonata','소나타','piano','피아노','violin','바이올린','cello','첼로',
+  'string','quartet','현악','중주','suite','모음곡','장조','단조','opera','오페라','중','오라토리오','가곡','music','곡','변주곡','variations',
+  'bwv','hwv','op','woo','rv','kv','trio','트리오','quintet','harp','하프','trumpet','트럼펫','orchestral','관현악','연습곡','etude','march','행진곡']);
+function tokMatch(a, b){
+  if(a===b) return true;
+  if(/^\d+$/.test(a) && (b==='mvt'+a)) return true;
+  if(/\d/.test(a) || /\d/.test(b)) return false;
+  const short = Math.min(a.length,b.length), long = Math.max(a.length,b.length);
+  if(short>=2 && (a.includes(b)||b.includes(a)) && short >= Math.ceil(long*0.5)) return true;
+  if(a.length>=4 && b.length>=3) return lev(a,b) <= Math.floor(Math.max(a.length,b.length)/4);
+  return false;
+}
+
+/** 곡 정보를 판정용 데이터로 */
+function cleanSong(s){
+  return String(s||'')
+    .replace(/[\(\[【][^\)\]】]*(official|mv|m\/v|lyric|audio|video|visualizer|hd|4k|teaser|가사|공식|뮤비)[^\)\]】]*[\)\]】]/gi,'')
+    .replace(/\s*(official\s*)?(music\s*video|lyric\s*video|m\/v|mv|audio|video)\s*$/i,'')
+    .replace(/\s{2,}/g,' ').trim();
+}
+function splitTitle(title, author){
+  title = String(title||''); author = String(author||'');
+  let artist = '', song = title;
+  if(/ - topic$/i.test(author)) artist = author.replace(/ - topic$/i,'');
+  else {
+    const m = title.match(/^(.+?)\s+[-–—|]\s+(.+)$/);
+    if(m){ artist = m[1]; song = m[2]; }
+    else artist = author.replace(/vevo$/i,'').replace(/ official$/i,'');
+  }
+  return {artist: artist.trim(), song: cleanSong(song) || title};
+}
+
+function judge(guess, round, extraAliases){
+  const g1 = normalize(guess), g2 = normalize(translateKo(guess));
+  if(!g1.length && !g2.length) return false;
+
+  // 별명
+  for(const al of [...(ALIASES[round.id]||[]), ...(extraAliases||[])]){
+    const a = normalize(al).join(''); const gg = g1.join('');
+    const digits = x => (x.match(/\d+/g)||[]).join(',');
+    if(a && (a===gg || (a.length>=3 && digits(a)===digits(gg) && lev(a,gg) <= Math.floor(a.length/4)))) return true;
+  }
+  if(!round.song) return false;
+
+  const songT = tokenSet(round.song);
+  const artistT = tokenSet(round.artist);
+  const allT = [...songT, ...artistT];
+
+  for(const g of [g1,g2]){
+    if(!g.length) continue;
+    // 숫자(번호/악장)가 틀리면 무조건 오답
+    if(g.some(t => isNumTok(t) && !allT.some(s => tokMatch(t,s)))) return false;
+  }
+
+  // 1) 붙여쓴 문자열 비교 (띄어쓰기/오타 무시) — 일반 단어만 쓴 경우는 제외
+  const cs = normalize(round.song.replace(/[\(\[][^\)\]]*[\)\]]/g,'')).join('');
+  for(const g of [g1,g2]){
+    if(!g.length || g.every(t => GENERIC.has(t) || isNumTok(t))) continue;
+    const cg = g.join('');
+    if(!cg || !cs) continue;
+    if(cg===cs) return true;
+    if(cs.length>=2 && cg.includes(cs)) return true;
+    if(cs.includes(cg) && cg.length >= Math.max(2, Math.ceil(cs.length*0.5))) return true;
+    if(Math.max(cg.length,cs.length)>=4 && 1 - lev(cg,cs)/Math.max(cg.length,cs.length) >= 0.7) return true;
+  }
+
+  // 2) 단어 단위 (대충 맞추기)
+  for(const g of [g1,g2]){
+    if(!g.length) continue;
+    let specific=0, numeric=0, generic=0, artistHits=0;
+    for(const t of g){
+      if(songT.some(s=>tokMatch(t,s))){ if(isNumTok(t)) numeric++; else if(GENERIC.has(t)) generic++; else specific++; }
+      else if(artistT.some(s=>tokMatch(t,s))) artistHits++;
+    }
+    const coverage = (specific+numeric+generic+artistHits)/g.length;
+    if(coverage>=0.6 && (specific>=1 || (numeric>=1 && (artistHits>=1 || generic>=1)) || (artistHits>=1 && generic>=2))) return true;
+  }
+  return false;
+}
+
+/* 한국어 정답 + 원래 유튜브 제목 둘 다로 판정 */
+function judgeAll(guess, r){
+  if(r.ko && judge(guess, {id:r.id, song:r.ko.t, artist:r.ko.c}, r.ko.a)) return true;
+  return judge(guess, r);
+}
+
+/* 힌트: 한글은 초성, 영어는 첫 글자 */
+const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+function makeHint(s){
+  s = s.replace(/[\(\[][^\)\]]*[\)\]]/g,'').trim();
+  return s.split(/\s+/).map(w => [...w].map((ch,i) => {
+    const c = ch.charCodeAt(0);
+    if(c>=0xAC00 && c<=0xD7A3) return CHO[Math.floor((c-0xAC00)/588)];
+    if(/[a-z]/i.test(ch)) return i===0 ? ch.toUpperCase() : '_';
+    if(/\d/.test(ch)) return ch;
+    return /[\p{L}]/u.test(ch) ? '_' : ch;
+  }).join('')).join('  ');
+}
+
+/* ---------------- 유튜브 플레이어 ---------------- */
+let player = null, apiReady = false, playerReady = false;
+let phase = 'idle';          // idle | listing | seeking | playing | revealed
+let seekTimer = null;
+const listWaiters = [];
+
+window.onYouTubeIframeAPIReady = () => { apiReady = true; };
+(function loadApi(){ const s=document.createElement('script'); s.src='https://www.youtube.com/iframe_api'; document.head.appendChild(s); })();
+
+let lastErrCode = null;
+
+/* 플레이어를 (필요하면 플레이리스트를 실은 채로) 새로 만든다 */
+async function createPlayer(listId){
+  for(let i=0;i<100 && !apiReady;i++) await sleep(100);
+  if(!apiReady) throw new Error('유튜브 API를 불러오지 못했어요. 인터넷 연결이나 광고 차단 확장프로그램을 확인하세요.');
+  if(player){ try{ player.destroy(); }catch(e){} player = null; }
+  // destroy 후 자리 다시 만들기
+  if(!$('player')){ const d=document.createElement('div'); d.id='player'; $('stage').prepend(d); }
+  playerReady = false; lastErrCode = null;
+  const vars = {playsinline:1, controls:0, disablekb:1, rel:0, iv_load_policy:3, fs:0, modestbranding:1, autoplay:0, mute:1};
+  if(location.protocol.startsWith('http')) vars.origin = location.origin;
+  if(listId){ vars.listType = 'playlist'; vars.list = listId; }
+  player = new YT.Player('player', {
+    width:'100%', height:'100%', playerVars: vars,
+    events:{ onReady:()=>{ playerReady=true; }, onStateChange:onState, onError:onErr }
+  });
+  for(let i=0;i<150 && !playerReady;i++) await sleep(100);
+  if(!playerReady) throw new Error('유튜브 플레이어를 준비하지 못했어요.');
+}
+async function ensurePlayer(){ if(!player || !playerReady) await createPlayer(null); }
+
+function errText(code){
+  if(code===153 || code===152) return '유튜브가 이 페이지에서의 재생을 막았어요 (오류 '+code+'). 파일을 더블클릭해서 열었다면 로컬 서버나 웹호스팅으로 열어주세요.';
+  if(code===101 || code===150) return '플레이리스트 첫 곡이 임베드 금지라서 목록을 못 읽었어요 (오류 '+code+').';
+  if(code===100) return '플레이리스트를 찾을 수 없어요. 링크가 맞는지, 비공개가 아닌지 확인해주세요 (오류 100).';
+  if(code===2) return '플레이리스트 ID가 올바르지 않아요 (오류 2).';
+  return '오류 코드 '+code;
+}
+
+async function fetchPlaylistIds(listId){
+  phase = 'listing';
+  const poll = async (n) => {
+    for(let i=0;i<n;i++){
+      await sleep(250);
+      if(lastErrCode!==null && lastErrCode!==101 && lastErrCode!==150) return null;
+      let ids = null; try{ ids = player.getPlaylist(); }catch(e){}
+      if(ids && ids.length) return ids;
+    }
+    return null;
+  };
+  // 1차: 플레이리스트를 실은 플레이어를 새로 만들어서 읽기
+  await createPlayer(listId);
+  let ids = await poll(16);
+  // 2차: cue 방식
+  if(!ids){ try{ player.cuePlaylist({listType:'playlist', list:listId}); }catch(e){} ids = await poll(16); }
+  // 3차: 실제로 (음소거) 재생시켜서 목록 받기
+  if(!ids){ try{ player.mute(); player.loadPlaylist({listType:'playlist', list:listId}); }catch(e){} ids = await poll(40); }
+  try{ player.stopVideo(); }catch(e){}
+  phase = 'idle';
+  if(ids && ids.length) return ids;
+  if(lastErrCode!==null) throw new Error(errText(lastErrCode));
+  throw new Error('플레이리스트 목록을 받지 못했어요. 링크를 확인해주세요. (유튜브 뮤직의 "좋아요 표시한 음악"이나 자동 생성 믹스는 외부에서 못 읽어요)');
+}
+
+/* ---------------- 듣는 구간 ---------------- */
+let rangeMode = store('songquiz:range') || 'early';
+function pickStart(dur, mode){
+  let lo, hi;
+  if(mode==='intro'){ lo=0; hi=0; }
+  else if(mode==='early'){ lo=0; hi=dur*0.25; }
+  else if(mode==='mid'){ lo=dur*0.35; hi=dur*0.65; }
+  else { lo=Math.min(5, dur*0.05); hi=dur-20; }
+  hi = Math.max(lo, Math.min(hi, dur-15));
+  return Math.max(0, Math.floor(lo + Math.random()*(hi-lo)));
+}
+function setRange(mode, applyNow){
+  rangeMode = mode; store('songquiz:range', mode);
+  document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.mode===mode));
+  // 게임 중이면 지금 곡을 새 구간에서 다시 재생
+  if(applyNow && cur && cur.dur && (phase==='playing' || phase==='revealed')){
+    cur.start = pickStart(cur.dur, mode);
+    player.seekTo(cur.start, true); player.playVideo();
+    const name = {intro:'처음부터',early:'초반 부분',mid:'중간 부분',any:'아무 곳'}[mode];
+    toast(`🎧 ${name}부터 다시 들려줄게요`);
+    if(phase==='playing') $('answer').focus();
+  }
+}
+document.querySelectorAll('#segSetup button').forEach(b => b.onclick = () => setRange(b.dataset.mode, false));
+document.querySelectorAll('#segGame button').forEach(b => b.onclick = () => setRange(b.dataset.mode, true));
+setRange(rangeMode, false);
+
+function onState(e){
+  if(phase==='seeking' && e.data===YT.PlayerState.PLAYING){
+    const dur = player.getDuration();
+    if(!dur){ return; }
+    clearTimeout(seekTimer);
+    cur.dur = dur;
+    const start = pickStart(dur, rangeMode);
+    cur.start = start;
+    const d = player.getVideoData() || {};
+    cur.rawTitle = d.title || cur.rawTitle || '';
+    cur.author = d.author || cur.author || '';
+    Object.assign(cur, splitTitle(cur.rawTitle, cur.author));
+    if(cur.rawTitle) cur.ko = matchSong(cur.rawTitle, cur.author, cur.pos);
+    player.seekTo(start, true);
+    phase = 'playing';
+    setTimeout(()=>{ player.unMute(); player.setVolume(+$('vol').value); $('stage').classList.remove('busy'); $('answer').focus(); }, 350);
+  }
+}
+function onErr(e){
+  lastErrCode = e.data;
+  console.warn('[노래맞추기] YouTube error', e.data, 'phase', phase);
+  if(phase==='seeking' || phase==='playing'){
+    clearTimeout(seekTimer);
+    skipBroken('재생할 수 없는 영상이라 건너뛰었어요 (임베드 제한)');
+  }
+}
+
+/* ---------------- 게임 진행 ---------------- */
+let pool = [], queue = [], qi = 0, score = 0, results = [], cur = null, lastInput = '';
+
+function show(id){ for(const s of ['setup','game','end']) $(s).classList.toggle('hidden', s!==id); $('hud').classList.toggle('hidden', id!=='game'); }
+
+async function start(){
+  const input = $('plInput').value;
+  const parsed = parseInput(input);
+  const msg = $('setupMsg'); msg.className='msg';
+  if(!parsed){ msg.className='msg err'; msg.textContent='플레이리스트 링크(list=...)나 유튜브 영상 링크를 넣어주세요.'; return; }
+  if(parsed.type==='private'){ msg.className='msg err'; msg.textContent='"좋아요 표시한 음악"은 본인만 볼 수 있어서 못 읽어요. 새 플레이리스트에 곡을 담고 공개로 바꾼 뒤 그 링크를 넣어주세요.'; return; }
+  $('startBtn').disabled = true; msg.textContent='플레이리스트 불러오는 중…';
+  try{
+    show('game'); $('stage').classList.add('busy');
+    await ensurePlayer();
+    pool = parsed.type==='playlist' ? await fetchPlaylistIds(parsed.id) : parsed.ids;
+    if(!pool.length) throw new Error('노래가 없어요.');
+    store('songquiz:last', input.trim()); lastInput = input.trim();
+    begin();
+  }catch(err){
+    show('setup'); msg.className='msg err'; msg.textContent = err.message || String(err);
+  }finally{ $('startBtn').disabled = false; }
+}
+
+function begin(){
+  const n = +$('rounds').value;
+  queue = shuffle(pool); if(n>0) queue = queue.slice(0, n);
+  qi = 0; score = 0; results = [];
+  $('stage').classList.toggle('hidevid', $('hideVid').checked);
+  show('game'); nextRound();
+}
+
+function nextRound(){
+  if(qi >= queue.length) return finish();
+  const id = queue[qi];
+  cur = {id, pos:pool.indexOf(id), ko:null, start:0, rawTitle:'', author:'', song:'', artist:'', correct:null, guess:'', hinted:false};
+  $('hudQ').textContent = qi+1; $('hudT').textContent = queue.length; $('hudS').textContent = score;
+  $('qnum').innerHTML = `Q${qi+1}<small>${queue.length}곡 중</small>`;
+  $('answer').value = ''; $('answer').disabled = false; $('submitBtn').disabled = false;
+  $('hint').textContent = ''; $('result').className = 'result';
+  $('stage').classList.add('guessing','busy');
+  for(const b of ['replayBtn','hintBtn','skipBtn']) $(b).disabled = false;
+  phase = 'seeking';
+  player.mute();
+  player.loadVideoById({videoId:id});
+  clearTimeout(seekTimer);
+  seekTimer = setTimeout(()=>{ if(phase==='seeking') skipBroken('응답이 없어 다음 곡으로 넘어갔어요'); }, 15000);
+}
+
+function skipBroken(text){
+  toast(text);
+  queue.splice(qi,1);
+  // 빠진 자리를 남은 곡으로 채우기
+  const rest = pool.filter(x => !queue.includes(x) && !results.some(r=>r.id===x));
+  if(+$('rounds').value>0 && rest.length) queue.push(rest[Math.floor(Math.random()*rest.length)]);
+  nextRound();
+}
+
+function refreshInfo(){
+  const d = player.getVideoData ? player.getVideoData() : {};
+  if(d && d.title && !cur.rawTitle){ cur.rawTitle = d.title; cur.author = d.author; Object.assign(cur, splitTitle(cur.rawTitle, cur.author)); }
+  if(cur.rawTitle && !cur.ko) cur.ko = matchSong(cur.rawTitle, cur.author, cur.pos);
+}
+
+function submit(e){
+  if(e) e.preventDefault();
+  if(phase==='revealed'){ goNext(); return; }
+  if(phase!=='playing') return;
+  const guess = $('answer').value.trim();
+  if(!guess){ $('answer').focus(); return; }
+  refreshInfo();
+  reveal(judgeAll(guess, cur), guess);
+}
+
+function reveal(ok, guess){
+  phase = 'revealed';
+  cur.correct = ok; cur.guess = guess;
+  if(ok) score++;
+  results.push(cur);
+  $('hudS').textContent = score;
+  $('stage').classList.remove('guessing');
+  $('answer').disabled = true; $('submitBtn').disabled = true;
+  for(const b of ['hintBtn','skipBtn']) $(b).disabled = true;
+  const r = $('result');
+  r.className = 'result show ' + (ok?'ok':'bad');
+  $('verdict').textContent = ok ? '⭕ 정답!' : (guess ? '❌ 틀렸어요' : '⏭ 패스');
+  $('rSong').textContent = cur.ko ? `${cur.ko.c} — ${cur.ko.t}` : (cur.song || cur.rawTitle || '(제목을 불러오지 못함)');
+  $('rArtist').textContent = cur.ko ? (cur.rawTitle ? '원제: '+cur.rawTitle : '') : (cur.artist || '');
+  $('rYours').textContent = guess ? `내 답: ${guess}` : '';
+  $('overrideBtn').classList.toggle('hidden', ok || !guess);
+  $('nextBtn').textContent = qi+1 >= queue.length ? '결과 보기 →' : '다음 곡 →';
+  setTimeout(()=>$('nextBtn').focus(), 50);
+}
+
+function goNext(){ qi++; nextRound(); }
+
+function finish(){
+  phase = 'idle';
+  try{ player.stopVideo(); }catch(e){}
+  show('end');
+  const total = results.length;
+  $('bigscore').innerHTML = `<span>${score}</span> / ${total}`;
+  const pct = total ? score/total : 0;
+  $('endMsg').textContent = pct===1 ? '완벽해요! 🎉 음악 천재' : pct>=0.7 ? '꽤 잘 아시네요 👏' : pct>=0.4 ? '나쁘지 않아요!' : '다음엔 더 잘할 수 있어요 🎧';
+  $('list').innerHTML = results.map((r,i)=>`
+    <div class="item">
+      <div class="mark ${r.correct?'o':'x'}">${r.correct?'O':'X'}</div>
+      <div class="t"><div><b>${i+1}.</b> ${r.ko ? esc(r.ko.c+' — '+r.ko.t) : esc(r.song||r.rawTitle||r.id)+(r.artist?` <span style="color:var(--muted)">— ${esc(r.artist)}</span>`:'')}</div>
+        <div class="g">${r.guess?('내 답: '+esc(r.guess)):'패스'}${r.hinted?' · 힌트 사용':''}</div></div>
+      <a href="https://music.youtube.com/watch?v=${r.id}" target="_blank" rel="noopener">듣기 ↗</a>
+    </div>`).join('');
+}
+
+/* ---------------- 이벤트 ---------------- */
+$('startBtn').onclick = start;
+$('answerForm').addEventListener('submit', submit);
+$('nextBtn').onclick = goNext;
+$('replayBtn').onclick = () => { if(phase==='playing'||phase==='revealed'){ player.seekTo(cur.start,true); player.playVideo(); $('answer').focus(); } };
+$('skipBtn').onclick = () => { if(phase==='playing'){ refreshInfo(); reveal(false, ''); } };
+$('hintBtn').onclick = () => {
+  if(phase!=='playing') return; refreshInfo();
+  cur.hinted = true;
+  $('hint').textContent = cur.ko ? `힌트: ${cur.ko.c} · ${makeHint(cur.ko.t)}` : cur.song ? '힌트: ' + makeHint(cur.song) : '힌트를 불러오는 중… 잠시 후 다시 눌러주세요';
+  $('answer').focus();
+};
+$('overrideBtn').onclick = () => {
+  if(cur && cur.correct===false && cur.guess){
+    cur.correct = true; score++; $('hudS').textContent = score;
+    $('result').className = 'result show ok'; $('verdict').textContent = '⭕ 정답 인정!';
+    $('overrideBtn').classList.add('hidden');
+  }
+};
+$('vol').oninput = e => { if(player && player.setVolume) player.setVolume(+e.target.value); };
+$('againBtn').onclick = begin;
+$('homeBtn').onclick = () => show('setup');
+$('logo').onclick = () => { if(phase!=='idle' && !$('game').classList.contains('hidden')){ try{player.stopVideo();}catch(e){} phase='idle'; } show('setup'); };
+document.addEventListener('keydown', e => {
+  if($('game').classList.contains('hidden')) return;
+  if(e.key==='Escape'){ $('replayBtn').click(); }
+  if(e.key==='Enter' && phase==='revealed' && document.activeElement!==$('answer')){ e.preventDefault(); goNext(); }
+});
+
+/* 기본 플레이리스트 채우기 */
+(function init(){
+  if(location.protocol==='file:'){
+    const m=$('setupMsg'); m.className='msg err';
+    m.innerHTML='⚠️ 지금 파일을 직접 열었어요(file://). 유튜브가 이 상태에선 재생/목록 읽기를 막는 경우가 많아요.<br>폴더에서 <code>python -m http.server</code> 실행 후 <b>http://localhost:8000</b> 으로 열어주세요.';
+  }
+  const q = new URLSearchParams(location.search).get('list');
+  $('plInput').value = q ? `https://music.youtube.com/playlist?list=${q}` : (DEFAULT_PLAYLIST || store('songquiz:last') || '');
+})();
+</script>
+</body>
+</html>
