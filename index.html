@@ -116,6 +116,9 @@
   .mini-seg{gap:0;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
   .mini-seg button{border:0;border-radius:0;padding:8px 11px;font-size:13px;font-weight:700}
   .mini-seg button+button{border-left:1px solid var(--line)}
+  .skiplog{margin-top:10px;font-size:13px;color:var(--warn);background:#2a2412;border:1px solid #5a4a1c;border-radius:10px;padding:8px 12px}
+  .skiplog summary{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .skiplog div{color:#e8d9a8;margin-top:4px} .skiplog a{color:var(--muted)}
   .hidden{display:none!important}
   kbd{background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;font-size:12px}
   .foot{color:var(--muted);font-size:13px;margin-top:14px;line-height:1.6}
@@ -164,7 +167,7 @@
     <button class="btn big" id="startBtn">게임 시작</button>
     <div class="msg" id="setupMsg"></div>
     <div class="foot">단축키: <kbd>Enter</kbd> 제출 / 다음 곡 · <kbd>Esc</kbd> 다시 듣기<br>
-      임베드가 막힌 영상(일부 공식 MV 등)은 자동으로 건너뜁니다.</div>
+      재생이 막힌 곡(일부 공식 MV·음원 등)은 자동으로 건너뛰고, 왜 건너뛰었는지 화면에 알려줘요.</div>
   </section>
 
   <!-- 게임 화면 -->
@@ -188,6 +191,7 @@
       <div class="vol">🔊 <input type="range" id="vol" min="0" max="100" value="70"></div>
     </div>
 
+    <div class="skiplog hidden" id="skipLog"></div>
     <div class="qnum" id="qnum">Q1<small></small></div>
     <form class="answer-row" id="answerForm" autocomplete="off">
       <input type="text" id="answer" placeholder="곡 제목을 입력하세요 (예: 베토벤 운명, 월광 3악장)">
@@ -217,6 +221,7 @@
       <div><button class="btn ghost" style="width:100%" id="homeBtn">처음으로</button></div>
     </div>
     <div class="list" id="list"></div>
+    <div class="skiplog hidden" id="skipLogEnd"></div>
   </section>
 </div>
 <div class="toast" id="toast"></div>
@@ -389,11 +394,34 @@ function translateKo(s){ let r = ' '+s+' '; for(const [re,to] of KO_DICT) r = r.
 function tokenSet(s){ return [...new Set([...normalize(s), ...normalize(translateKo(s))])]; }
 
 const isNumTok = t => /^(mvt)?\d+$/.test(t);
+
+/* 한글 ↔ 영어 발음 비교: 자음 뼈대만 뽑아서 비교 (배드 = bad, 다이너마이트 = dynamite) */
+const HAN_CHO  = ['K','K','N','T','T','L','M','P','P','S','S','','J','J','J','K','T','P','H'];
+const HAN_JONG = ['','K','K','KS','N','NJ','N','T','L','LK','LM','LP','LS','LT','LP','L','M','P','PS','T','T','N','J','J','K','T','P','H'];
+function skelKo(s){
+  let o=''; for(const ch of String(s)){ const c=ch.charCodeAt(0); if(c<0xAC00||c>0xD7A3) continue;
+    const i=c-0xAC00; o += HAN_CHO[Math.floor(i/588)] + HAN_JONG[i%28]; }
+  return o.replace(/(.)\1+/g,'$1');
+}
+function skelEn(s){
+  let w = ' '+String(s).toLowerCase().replace(/[^a-z]+/g,' ')+' ';
+  w = w.replace(/tion/g,'syon').replace(/ph/g,'f').replace(/ck/g,'k').replace(/qu/g,'kw').replace(/gh/g,'')
+       .replace(/ kn/g,' n').replace(/ wr/g,' r').replace(/wh/g,'w').replace(/tch/g,'J').replace(/ch/g,'J')
+       .replace(/sh/g,'s').replace(/th/g,'t').replace(/ts(?= )/g,'J').replace(/c(?=[eiy])/g,'s')
+       .replace(/ge(?= )/g,'Je').replace(/ng/g,'N').replace(/x/g,'ks')
+       .replace(/re(?= )/g,'e').replace(/h(?![aeiouy])/g,'').replace(/r(?![aeiouy])/g,'');
+  const M={b:'P',p:'P',f:'P',v:'P',d:'T',t:'T',k:'K',g:'K',c:'K',q:'K',s:'S',z:'J',j:'J',J:'J',l:'L',r:'L',m:'M',n:'N',N:'N',h:'H'};
+  let o=''; for(const ch of w) if(M[ch]) o+=M[ch];
+  return o.replace(/(.)\1+/g,'$1');
+}
+function skelEq(a,b){ if(!a||!b) return false; if(a===b) return true; return Math.max(a.length,b.length)>=4 && lev(a,b)<=1; }
 const GENERIC = new Set(['symphony','교향곡','concerto','협주곡','sonata','소나타','piano','피아노','violin','바이올린','cello','첼로',
   'string','quartet','현악','중주','suite','모음곡','장조','단조','opera','오페라','중','오라토리오','가곡','music','곡','변주곡','variations',
   'bwv','hwv','op','woo','rv','kv','trio','트리오','quintet','harp','하프','trumpet','트럼펫','orchestral','관현악','연습곡','etude','march','행진곡']);
 function tokMatch(a, b){
   if(a===b) return true;
+  const ha=/^[가-힣]+$/.test(a), hb=/^[가-힣]+$/.test(b), la=/^[a-z]+$/.test(a), lb=/^[a-z]+$/.test(b);
+  if((ha&&lb)||(la&&hb)) return skelEq(ha?skelKo(a):skelEn(a), hb?skelKo(b):skelEn(b));
   if(/^\d+$/.test(a) && (b==='mvt'+a)) return true;
   if(/\d/.test(a) || /\d/.test(b)) return false;
   const short = Math.min(a.length,b.length), long = Math.max(a.length,b.length);
@@ -441,6 +469,13 @@ function judge(guess, round, extraAliases){
     if(!g.length) continue;
     // 숫자(번호/악장)가 틀리면 무조건 오답
     if(g.some(t => isNumTok(t) && !allT.some(s => tokMatch(t,s)))) return false;
+  }
+
+  // 0) 영어 제목을 한글 발음으로 쓴 경우 (러브다이브 = Love Dive)
+  if(/[가-힣]/.test(guess) && /[a-z]/i.test(round.song)){
+    const sg = skelKo(guess);
+    const ss = skelEn(normalize(round.song.replace(/[\(\[][^\)\]]*[\)\]]/g,'')).filter(t=>/^[a-z]+$/.test(t)).join(' '));
+    if(sg && ss && (skelEq(sg,ss) || (ss.length>=3 && sg.includes(ss)))) return true;
   }
 
   // 1) 붙여쓴 문자열 비교 (띄어쓰기/오타 무시) — 일반 단어만 쓴 경우는 제외
@@ -521,36 +556,68 @@ async function ensurePlayer(){ if(!player || !playerReady) await createPlayer(nu
 
 function errText(code){
   if(code===153 || code===152) return '유튜브가 이 페이지에서의 재생을 막았어요 (오류 '+code+'). 파일을 더블클릭해서 열었다면 로컬 서버나 웹호스팅으로 열어주세요.';
-  if(code===101 || code===150) return '플레이리스트 첫 곡이 임베드 금지라서 목록을 못 읽었어요 (오류 '+code+').';
+  if(code===101 || code===150) return '플레이리스트 곡들이 다른 사이트 재생을 막아둬서 목록을 못 읽었어요 (오류 '+code+').';
   if(code===100) return '플레이리스트를 찾을 수 없어요. 링크가 맞는지, 비공개가 아닌지 확인해주세요 (오류 100).';
   if(code===2) return '플레이리스트 ID가 올바르지 않아요 (오류 2).';
   return '오류 코드 '+code;
 }
 
+/* 건너뛴 이유 */
+function skipReason(code){
+  if(code===101 || code===150) return '업로더가 다른 사이트에서 재생을 막아둔 곡';
+  if(code===100) return '삭제됐거나 비공개인 곡';
+  if(code===2)   return '잘못된 영상 주소';
+  if(code===5)   return '이 브라우저에서 재생할 수 없는 영상';
+  if(code==='timeout') return '재생이 시작되지 않음';
+  return '재생 오류 (코드 '+code+')';
+}
+
+/* 플레이리스트의 idx번째 곡에서 목록 읽기 시도 (숨겨진 임시 플레이어) */
+function probeIndex(listId, idx){
+  return new Promise(res => {
+    let box = $('probeBox');
+    if(!box){ box=document.createElement('div'); box.id='probeBox'; box.style.cssText='position:fixed;left:-3000px;top:0;width:320px'; document.body.appendChild(box); }
+    const d=document.createElement('div'); d.id='probe'+idx+'_'+Date.now(); box.appendChild(d);
+    let done=false, p=null, iv=null, to=null;
+    const fin = v => { if(done) return; done=true; clearInterval(iv); clearTimeout(to); try{p.destroy();}catch(e){} const el=document.getElementById(d.id); if(el) el.remove(); res(v); };
+    const vars={listType:'playlist', list:listId, index:idx, mute:1, autoplay:0, controls:0};
+    if(location.protocol.startsWith('http')) vars.origin = location.origin;
+    p = new YT.Player(d.id, {width:320, height:180, playerVars:vars, events:{
+      onError: e => fin({idx, err:e.data}),
+      onReady: () => setTimeout(()=>{ if(!done){ try{ p.loadPlaylist({listType:'playlist', list:listId, index:idx}); }catch(e){} } }, 1500)
+    }});
+    iv = setInterval(()=>{ let ids=null; try{ ids=p.getPlaylist(); }catch(e){} if(ids && ids.length) fin({idx, ids}); }, 250);
+    to = setTimeout(()=>fin({idx, timeout:true}), 9000);
+  });
+}
+
+/* 목록 읽기: 막힌 곡이면 다음 곡으로 넘어가며 재생되는 곡을 찾을 때까지 */
+const MAX_SCAN = 48;
 async function fetchPlaylistIds(listId){
   phase = 'listing';
-  const poll = async (n) => {
-    for(let i=0;i<n;i++){
-      await sleep(250);
-      if(lastErrCode!==null && lastErrCode!==101 && lastErrCode!==150) return null;
-      let ids = null; try{ ids = player.getPlaylist(); }catch(e){}
-      if(ids && ids.length) return ids;
+  for(let i=0;i<100 && !apiReady;i++) await sleep(100);
+  const blocked = [];
+  let base = 0, size = 1;               // 첫 곡은 혼자, 막혀 있으면 8곡씩 동시에 확인
+  while(base < MAX_SCAN){
+    setLoading(base===0 ? '플레이리스트 읽는 중…' : `앞쪽 곡들이 막혀 있어요. ${base+1}~${base+size}번 곡 확인 중…`);
+    const rs = await Promise.all([...Array(size)].map((_,k)=>probeIndex(listId, base+k)));
+    rs.sort((x,y)=>x.idx-y.idx);
+    const ok = rs.find(x=>x.ids);
+    for(const x of rs) if(x.err!=null && (!ok || x.idx<ok.idx)) blocked.push(x);
+    if(ok){
+      phase='idle';
+      // 목록 읽다가 막힌 걸로 확인된 곡은 미리 표시
+      for(const b of blocked){ const id = ok.ids[b.idx]; if(id) knownBlocked.set(id, b.err); }
+      return ok.ids;
     }
-    return null;
-  };
-  // 1차: 플레이리스트를 실은 플레이어를 새로 만들어서 읽기
-  await createPlayer(listId);
-  let ids = await poll(16);
-  // 2차: cue 방식
-  if(!ids){ try{ player.cuePlaylist({listType:'playlist', list:listId}); }catch(e){} ids = await poll(16); }
-  // 3차: 실제로 (음소거) 재생시켜서 목록 받기
-  if(!ids){ try{ player.mute(); player.loadPlaylist({listType:'playlist', list:listId}); }catch(e){} ids = await poll(40); }
-  try{ player.stopVideo(); }catch(e){}
-  phase = 'idle';
-  if(ids && ids.length) return ids;
-  if(lastErrCode!==null) throw new Error(errText(lastErrCode));
-  throw new Error('플레이리스트 목록을 받지 못했어요. 링크를 확인해주세요. (유튜브 뮤직의 "좋아요 표시한 음악"이나 자동 생성 믹스는 외부에서 못 읽어요)');
+    if(base===0 && rs[0].err!=null && rs[0].err!==101 && rs[0].err!==150){ phase='idle'; throw new Error(errText(rs[0].err)); }
+    if(rs.every(x=>x.timeout)){ phase='idle'; throw new Error('플레이리스트 목록을 받지 못했어요. 링크가 맞는지, 공개(또는 일부공개)인지 확인해주세요.'); }
+    base += size; size = 8;
+  }
+  phase='idle';
+  throw new Error(`앞에서부터 ${blocked.length}곡을 확인했는데 전부 "${skipReason(150)}"이라 이 플레이리스트는 쓸 수 없어요. 공식 뮤직비디오·유튜브 뮤직 음원은 막혀 있는 경우가 많아요. 같은 노래의 가사 영상(일반 유튜브)으로 플레이리스트를 만들어 넣어주세요.`);
 }
+function setLoading(t){ const el=document.querySelector('#stage .loading'); if(el) el.textContent=t; }
 
 /* ---------------- 듣는 구간 ---------------- */
 let rangeMode = store('songquiz:range') || 'early';
@@ -617,8 +684,8 @@ function onErr(e){
   lastErrCode = e.data;
   console.warn('[노래맞추기] YouTube error', e.data, 'phase', phase);
   if(phase==='seeking' || phase==='playing'){
-    clearTimeout(seekTimer);
-    skipBroken('재생할 수 없는 영상이라 건너뛰었어요 (임베드 제한)');
+    clearTimeout(seekTimer); clearInterval(pollTimer);
+    skipBroken(e.data);
   }
 }
 
@@ -638,6 +705,7 @@ async function start(){
     show('game'); $('stage').classList.add('busy');
     await ensurePlayer();
     currentListId = parsed.type==='playlist' ? parsed.id : null;
+    knownBlocked.clear();
     pool = parsed.type==='playlist' ? await fetchPlaylistIds(parsed.id) : parsed.ids;
     if(!pool.length) throw new Error('노래가 없어요.');
     store('songquiz:last', input.trim()); lastInput = input.trim();
@@ -649,8 +717,12 @@ async function start(){
 
 function begin(){
   const n = +$('rounds').value;
-  queue = shuffle(pool); if(n>0) queue = queue.slice(0, n);
+  skipped = [];
+  for(const [id,code] of knownBlocked) if(pool.includes(id)) skipped.push({id, code, title:'', pos: pool.indexOf(id)});
+  renderSkipLog();
+  queue = shuffle(pool.filter(id => !knownBlocked.has(id))); if(n>0) queue = queue.slice(0, n);
   qi = 0; score = 0; results = [];
+  if(!queue.length){ show('setup'); const m=$('setupMsg'); m.className='msg err'; m.textContent='재생할 수 있는 곡이 없어요.'; return; }
   $('stage').classList.toggle('hidevid', $('hideVid').checked);
   show('game'); nextRound();
 }
@@ -663,7 +735,7 @@ function nextRound(){
   $('qnum').innerHTML = `Q${qi+1}<small>${queue.length}곡 중</small>`;
   $('answer').value = ''; $('answer').disabled = false; $('submitBtn').disabled = false;
   $('hint').textContent = ''; $('result').className = 'result';
-  $('stage').classList.add('guessing','busy');
+  $('stage').classList.add('guessing','busy'); setLoading('불러오는 중…');
   for(const b of ['replayBtn','hintBtn','skipBtn']) $(b).disabled = false;
   phase = 'seeking';
   player.mute();
@@ -675,12 +747,33 @@ function nextRound(){
   seekTimer = setTimeout(()=>{ if(phase==='seeking'){ $('stage').classList.remove('busy'); $('stage').classList.add('gate'); } }, 3500);
 }
 
-function skipBroken(text){
-  toast(text); $('stage').classList.remove('gate');
+const knownBlocked = new Map();   // 영상ID → 오류코드
+let skipped = [];                  // 이번 게임에서 건너뛴 곡
+function logSkip(id, code){
+  let title=''; try{ const d=player.getVideoData(); if(d && d.video_id===id) title=d.title||''; }catch(e){}
+  skipped.push({id, code, title, pos: pool.indexOf(id)});
+  renderSkipLog();
+}
+function renderSkipLog(){
+  const el=$('skipLog'); if(!el) return;
+  if(!skipped.length){ el.innerHTML=''; el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const last = skipped[skipped.length-1];
+  el.innerHTML = `<details><summary>⏭ 건너뛴 곡 ${skipped.length}개 · 최근: ${esc(last.title || ('플리 '+(last.pos+1)+'번째 곡'))} — ${esc(skipReason(last.code))}</summary>`+
+    skipped.map(x=>`<div>• ${esc(x.title || ('플리 '+(x.pos+1)+'번째 곡'))} — ${esc(skipReason(x.code))} <a href="https://www.youtube.com/watch?v=${x.id}" target="_blank" rel="noopener">확인 ↗</a></div>`).join('')+`</details>`;
+}
+function skipBroken(code){
+  const id = queue[qi];
+  knownBlocked.set(id, code);
+  logSkip(id, code);
+  const s = skipped[skipped.length-1];
+  toast(`⏭ ${s.title ? '「'+s.title+'」' : '플리 '+(s.pos+1)+'번째 곡'} 건너뜀: ${skipReason(code)}`, 3500);
+  $('stage').classList.remove('gate');
   queue.splice(qi,1);
   // 빠진 자리를 남은 곡으로 채우기
-  const rest = pool.filter(x => !queue.includes(x) && !results.some(r=>r.id===x));
+  const rest = pool.filter(x => !queue.includes(x) && !results.some(r=>r.id===x) && !knownBlocked.has(x));
   if(+$('rounds').value>0 && rest.length) queue.push(rest[Math.floor(Math.random()*rest.length)]);
+  if(qi >= queue.length && !results.length){ phase='idle'; show('setup'); const m=$('setupMsg'); m.className='msg err'; m.textContent='재생할 수 있는 곡이 하나도 없어요. 아래 이유를 확인하세요: '+skipReason(code); return; }
   nextRound();
 }
 
@@ -737,13 +830,17 @@ function finish(){
         <div class="g">${r.guess?('내 답: '+esc(r.guess)):'패스'}${r.hinted?' · 힌트 사용':''}</div></div>
       <a href="https://music.youtube.com/watch?v=${r.id}" target="_blank" rel="noopener">듣기 ↗</a>
     </div>`).join('');
+  const se=$('skipLogEnd');
+  if(skipped.length){ se.classList.remove('hidden'); se.innerHTML = `<details><summary>⏭ 재생이 막혀서 건너뛴 곡 ${skipped.length}개 (눌러서 보기)</summary>`+
+    skipped.map(x=>`<div>• ${esc(x.title || ('플리 '+(x.pos+1)+'번째 곡'))} — ${esc(skipReason(x.code))}</div>`).join('')+`</details>`; }
+  else se.classList.add('hidden');
 }
 
 /* ---------------- 이벤트 ---------------- */
 $('startBtn').onclick = start;
 $('playGate').onclick = () => { $('stage').classList.remove('gate'); $('stage').classList.add('busy'); try{ player.playVideo(); }catch(e){}
   clearTimeout(seekTimer);
-  seekTimer = setTimeout(()=>{ if(phase==='seeking') skipBroken('재생이 안 돼서 다음 곡으로 넘어갔어요'); }, 12000); };
+  seekTimer = setTimeout(()=>{ if(phase==='seeking') skipBroken('timeout'); }, 12000); };
 $('answerForm').addEventListener('submit', submit);
 $('nextBtn').onclick = goNext;
 $('replayBtn').onclick = () => { if(phase==='playing'||phase==='revealed'){ player.seekTo(cur.start,true); player.playVideo(); $('answer').focus(); } };
